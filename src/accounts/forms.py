@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 
 User = get_user_model()
 
@@ -26,3 +27,20 @@ class UserCreationForm(forms.ModelForm):
         if commit:
             user.save()
         return user
+
+
+class UserLoginForm(forms.Form):
+    query = forms.CharField(label='Username / Email')
+    password = forms.CharField(label='Password', widget=forms.PasswordInput)
+
+    def clean(self, *args, **kwargs):
+        query = self.cleaned_data.get('query')
+        password = self.cleaned_data.get('password')
+        user_qs_final = User.objects.filter(Q(username__iexact=query) | Q(email__iexact=query)).distinct()
+        if not user_qs_final.exists() and user_qs_final.count != 1:
+            raise forms.ValidationError("Invalid credentials - user does not exist")
+        user_obj = user_qs_final.first()
+        if not user_obj.check_password(password):
+            raise forms.ValidationError("Credentials are not correct")
+        self.cleaned_data["user_obj"] = user_obj
+        return super(UserLoginForm, self).clean(*args, **kwargs)
